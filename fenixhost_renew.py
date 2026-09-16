@@ -312,22 +312,55 @@ def turnstile_solved(page):
 
 
 def try_click_turnstile(page):
+    selectors = [
+        "input[type='checkbox']",
+        "input",
+        "label",
+        "body",
+    ]
+
+    try:
+        frame = page.frame_locator(
+            "iframe[src*='challenges.cloudflare.com']"
+        )
+
+        for sel in selectors:
+            try:
+                frame.locator(
+                    sel
+                ).first.click(
+                    timeout=2000
+                )
+
+                return True
+
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+
     try:
         for frame in page.frames:
             if (
                 "challenges.cloudflare.com"
                 in (frame.url or "")
             ):
-                box = frame.locator(
-                    "input[type='checkbox']"
-                )
+                for sel in selectors:
+                    try:
+                        loc = frame.locator(
+                            sel
+                        ).first
 
-                if box.count():
-                    box.first.click(
-                        timeout=2000
-                    )
+                        if loc.count():
+                            loc.click(
+                                timeout=2000
+                            )
 
-                    return True
+                            return True
+
+                    except Exception:
+                        pass
 
     except Exception:
         pass
@@ -341,12 +374,10 @@ def wait_turnstile(page, timeout):
         "校验..."
     )
 
-    deadline = time.time() + timeout
-
     start = time.time()
-    clicked = False
+    attempts = 0
 
-    while time.time() < deadline:
+    while time.time() - start < timeout:
         if turnstile_solved(page):
             log(
                 "✅ Turnstile 校验已通过"
@@ -355,18 +386,19 @@ def wait_turnstile(page, timeout):
             return True
 
         if (
-            time.time() - start > 15
-            and not clicked
+            time.time() - start > 5
+            and attempts < 10
         ):
             if try_click_turnstile(page):
-                clicked = True
+                attempts += 1
 
                 log(
                     "🖱️ 已尝试点击 "
-                    "Turnstile 验证框"
+                    f"Turnstile 验证框"
+                    f"（第 {attempts} 次）"
                 )
 
-        page.wait_for_timeout(2000)
+        page.wait_for_timeout(3000)
 
     log(
         "⚠️ Turnstile 未在限时内通过，"
@@ -374,6 +406,7 @@ def wait_turnstile(page, timeout):
     )
 
     return False
+
 
 
 def login_if_needed(page):
@@ -485,7 +518,7 @@ def login_if_needed(page):
         email.fill(FENIX_LOGIN)
         password.fill(FENIX_PASSWORD)
 
-        wait_turnstile(page, 40)
+        wait_turnstile(page, 60)
 
         submit = first_visible(
             page,
