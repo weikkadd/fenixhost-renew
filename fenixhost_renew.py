@@ -290,6 +290,47 @@ def first_visible(page, selectors):
     return None
 
 
+def turnstile_solved(page):
+    try:
+        return page.evaluate(
+            "() => {"
+            " const el = document.querySelector("
+            "'input[name=\"cf-turnstile-response\"]'"
+            ");"
+            " return !!(el && el.value"
+            " && el.value.length > 10);"
+            "}"
+        )
+
+    except Exception:
+        return False
+
+
+def wait_turnstile(page, timeout):
+    log(
+        "⏳ 等待 Cloudflare Turnstile "
+        "校验..."
+    )
+
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        if turnstile_solved(page):
+            log(
+                "✅ Turnstile 校验已通过"
+            )
+            return True
+
+        page.wait_for_timeout(2000)
+
+    log(
+        "⚠️ Turnstile 未在限时内通过，"
+        "仍尝试提交"
+    )
+
+    return False
+
+
 def login_if_needed(page):
     page.goto(
         SERVER_URL,
@@ -350,13 +391,6 @@ def login_if_needed(page):
             ],
         )
 
-    if not email or not password:
-        log(
-            "❌ 没找到登录框，"
-            f"当前页面: {page.url}"
-        )
-        return False
-
     if not FENIX_LOGIN or not FENIX_PASSWORD:
         log(
             "❌ 缺少 FENIX_LOGIN "
@@ -364,54 +398,90 @@ def login_if_needed(page):
         )
         return False
 
-    log("🔐 正在登录 FenixHost...")
+    for attempt in range(2):
+        if attempt > 0:
+            log(
+                "🔄 第 "
+                f"{attempt + 1}"
+                " 次重试登录..."
+            )
 
-    email.fill(FENIX_LOGIN)
-    password.fill(FENIX_PASSWORD)
+            page.goto(
+                "https://fenixhost.net/login",
+                wait_until="domcontentloaded",
+                timeout=60000,
+            )
 
-    log(
-        "⏳ 等待 Cloudflare Turnstile 校验..."
-    )
+            page.wait_for_timeout(3000)
 
-    page.wait_for_timeout(6000)
+            email = first_visible(
+                page,
+                [
+                    "input#email",
+                    'input[name="email"]',
+                    'input[type="email"]',
+                ],
+            )
 
-    submit = first_visible(
-        page,
-        [
-            'form#wire\\:end button[type="submit"]',
-            'button[type="submit"]',
-            'button:has-text("Sign in")',
-            'button:has-text("Iniciar sesión")',
-        ],
-    )
+            password = first_visible(
+                page,
+                [
+                    "input#password",
+                    'input[name="password"]',
+                    'input[type="password"]',
+                ],
+            )
 
-    if not submit:
-        log("❌ 没找到登录按钮")
-        return False
+            if not email or not password:
+                break
 
-    submit.click()
+        log("🔐 正在登录 FenixHost...")
 
-    page.wait_for_timeout(5000)
+        email.fill(FENIX_LOGIN)
+        password.fill(FENIX_PASSWORD)
 
-    body = page.locator(
-        "body"
-    ).inner_text().lower()
+        wait_turnstile(page, 40)
 
-    challenge_words = [
-        "captcha",
-        "verify you are human",
-        "security check",
-        "just a moment",
-    ]
-
-    if any(
-        word in body
-        for word in challenge_words
-    ) and "/login" in page.url:
-        log(
-            "⚠️ 检测到验证码/"
-            "安全验证，需要手动处理"
+        submit = first_visible(
+            page,
+            [
+                'button[type="submit"]',
+                'button:has-text("Sign in")',
+                'button:has-text("Iniciar sesión")',
+            ],
         )
+
+        if not submit:
+            log("❌ 没找到登录按钮")
+            continue
+
+        submit.click()
+
+        for _ in range(10):
+            page.wait_for_timeout(2000)
+
+            if "/login" not in page.url:
+                break
+
+        if "/login" not in page.url:
+            break
+
+        log(
+            "⚠️ 登录后仍停留在登录页"
+        )
+
+    if "/login" in page.url:
+        body = page.locator(
+            "body"
+        ).inner_text().lower()
+
+        if "credential" in body or (
+            "incorrect" in body
+        ):
+            log(
+                "❌ 账号或密码错误"
+            )
+
         return False
 
     page.goto(
