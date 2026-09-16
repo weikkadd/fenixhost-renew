@@ -29,6 +29,8 @@ jobs:
 
       - name: 安装依赖
         run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
           python -m pip install --upgrade pip
           pip install playwright requests "requests[socks]"
           python -m playwright install --with-deps chromium
@@ -63,7 +65,7 @@ jobs:
           IS_PROXY: ${{ env.IS_PROXY }}
           PROXY_SERVER: ${{ env.PROXY_SERVER }}
 
-        run: python fenixhost_renew.py
+        run: xvfb-run -a python fenixhost_renew.py
 
       - name: 失败时上传调试截图
         if: failure()

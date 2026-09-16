@@ -30,6 +30,11 @@ MANUAL_RUN = os.getenv(
     "false"
 ).lower() == "true"
 
+HEADLESS = os.getenv(
+    "HEADLESS",
+    "false"
+).lower() == "true"
+
 RENEW_THRESHOLD_DAYS = float(
     os.getenv(
         "RENEW_THRESHOLD_DAYS",
@@ -306,6 +311,30 @@ def turnstile_solved(page):
         return False
 
 
+def try_click_turnstile(page):
+    try:
+        for frame in page.frames:
+            if (
+                "challenges.cloudflare.com"
+                in (frame.url or "")
+            ):
+                box = frame.locator(
+                    "input[type='checkbox']"
+                )
+
+                if box.count():
+                    box.first.click(
+                        timeout=2000
+                    )
+
+                    return True
+
+    except Exception:
+        pass
+
+    return False
+
+
 def wait_turnstile(page, timeout):
     log(
         "⏳ 等待 Cloudflare Turnstile "
@@ -314,12 +343,28 @@ def wait_turnstile(page, timeout):
 
     deadline = time.time() + timeout
 
+    start = time.time()
+    clicked = False
+
     while time.time() < deadline:
         if turnstile_solved(page):
             log(
                 "✅ Turnstile 校验已通过"
             )
+
             return True
+
+        if (
+            time.time() - start > 15
+            and not clicked
+        ):
+            if try_click_turnstile(page):
+                clicked = True
+
+                log(
+                    "🖱️ 已尝试点击 "
+                    "Turnstile 验证框"
+                )
 
         page.wait_for_timeout(2000)
 
@@ -672,14 +717,15 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            headless=True,
+            headless=HEADLESS,
             proxy={
                 "server": PROXY_SERVER
             }
             if IS_PROXY
             else None,
             args=[
-                "--no-sandbox"
+                "--no-sandbox",
+                "--disable-blink-features=AutomationControlled",
             ],
         )
 
