@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
-from playwright.sync_api import sync_playwright
+from patchright.sync_api import sync_playwright
 
 
 SERVER_URL = os.getenv("FENIX_SERVER_URL", "").strip()
