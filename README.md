@@ -16,7 +16,7 @@ FenixHost 免费 Minecraft 服务器自动续期脚本（GitHub Actions 版）�
 
 | Name | 说明 |
 |------|------|
-| `FENIX_SERVER_URL` | 服务详情页地址，如 `https://fenixhost.net/services/556`（必填） |
+| `FENIX_SERVER_URL` | 服务详情页地址，如 `https://fenixhost.net/services/xxxxxxxx`（必填） |
 | `FENIX_LOGIN` | FenixHost 登录邮箱（必填） |
 | `FENIX_PASSWORD` | 登录密码（必填） |
 | `TG_BOT_TOKEN` | Telegram Bot Token（必填） |
