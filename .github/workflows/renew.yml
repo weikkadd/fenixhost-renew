@@ -52,6 +52,7 @@ jobs:
       - name: 执行续期
         env:
           FENIX_SERVER_URL: ${{ secrets.FENIX_SERVER_URL }}
+          FENIX_COOKIE: ${{ secrets.FENIX_COOKIE }}
           FENIX_LOGIN: ${{ secrets.FENIX_LOGIN }}
           FENIX_PASSWORD: ${{ secrets.FENIX_PASSWORD }}
 

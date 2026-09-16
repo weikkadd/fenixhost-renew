@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright
 SERVER_URL = os.getenv("FENIX_SERVER_URL", "").strip()
 FENIX_LOGIN = os.getenv("FENIX_LOGIN", "").strip()
 FENIX_PASSWORD = os.getenv("FENIX_PASSWORD", "").strip()
+FENIX_COOKIE = os.getenv("FENIX_COOKIE", "").strip()
 
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "").strip()
 TG_CHAT_ID = os.getenv("TG_CHAT_ID", "").strip()
@@ -409,6 +410,61 @@ def wait_turnstile(page, timeout):
 
 
 
+def parse_cookies(cookie_str):
+    cookies = []
+
+    for pair in cookie_str.split(";"):
+        pair = pair.strip()
+
+        if "=" in pair:
+            name, value = pair.split(
+                "=",
+                1,
+            )
+
+            cookies.append({
+                "name": name.strip(),
+                "value": value.strip(),
+                "domain": "fenixhost.net",
+                "path": "/",
+            })
+
+    return cookies
+
+
+def inject_login(page):
+    cookies = parse_cookies(FENIX_COOKIE)
+
+    if not cookies:
+        log("❌ FENIX_COOKIE 解析为空")
+        return False
+
+    page.context.add_cookies(cookies)
+
+    page.goto(
+        SERVER_URL,
+        wait_until="domcontentloaded",
+        timeout=60000,
+    )
+
+    page.wait_for_timeout(3000)
+
+    if (
+        "/login" in page.url
+        or "/services/" not in page.url
+    ):
+        log(
+            "❌ Cookie 已过期或无效，"
+            "请重新导出 FENIX_COOKIE"
+        )
+
+        return False
+
+    log("✅ Cookie 注入成功，已进入服务页")
+
+    return True
+
+
 def login_if_needed(page):
     page.goto(
         SERVER_URL,
@@ -779,7 +835,19 @@ def main():
         page = context.new_page()
 
         try:
-            if not login_if_needed(page):
+            if FENIX_COOKIE:
+                logged_in = inject_login(page)
+                fail_reason = (
+                    "Cookie 已过期，"
+                    "请重新导出 FENIX_COOKIE"
+                )
+            else:
+                logged_in = login_if_needed(page)
+                fail_reason = (
+                    "登录失败或遇到安全验证"
+                )
+
+            if not logged_in:
                 page.screenshot(
                     path="fenix_login_fail.png",
                     full_page=True,
@@ -788,7 +856,7 @@ def main():
                 tg(
                     build_error_message(
                         "❌ FenixHost 登录失败",
-                        "登录失败或遇到安全验证",
+                        fail_reason,
                         ip,
                     )
                 )
